@@ -369,6 +369,22 @@ tbody tr:hover { background: var(--bg-hover); }
 .state-close_wait, .state-time_wait { color: var(--accent-orange); }
 .state-close { color: var(--accent-red); }
 
+/* Logcat-sourced rows */
+.logcat-row { background: rgba(187, 154, 247, 0.06); }
+.logcat-row:hover { background: rgba(187, 154, 247, 0.12); }
+.source-logcat {
+    display: inline-block;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1px 4px;
+    border-radius: 3px;
+    background: var(--accent-purple);
+    color: var(--bg-primary);
+    vertical-align: middle;
+    margin-right: 3px;
+    letter-spacing: 0.5px;
+}
+
 /* ---- Detail Panel ---- */
 #detail-panel {
     width: 320px;

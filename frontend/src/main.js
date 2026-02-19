@@ -398,21 +398,27 @@
         const protoClass = `proto-${proto.toLowerCase()}`;
         const method = pkt.http_method || '';
         const methodClass = method ? `method-${method.toLowerCase()}` : '';
+        const isLogcat = (pkt.flags || '').startsWith('logcat:');
         const hostPath = pkt.http_host
             ? `${pkt.http_host}${pkt.http_path || ''}`
             : '';
-        const flagsLabel = (!method && pkt.flags) ? pkt.flags : '';
+        const flagsLabel = (!method && pkt.flags && !isLogcat) ? pkt.flags : '';
+        const sourceTag = isLogcat ? '<span class="source-logcat" title="Captured from logcat">LC</span> ' : '';
 
         tr.innerHTML = `
             <td class="col-time">${time}</td>
             <td class="col-device truncate">${escapeHtml(pkt.serial || '')}</td>
             <td class="col-proto ${protoClass}">${proto}</td>
-            <td class="col-src truncate">${escapeHtml(pkt.src_ip || '')}:${pkt.src_port || ''}</td>
-            <td class="col-dst truncate">${escapeHtml(pkt.dst_ip || '')}:${pkt.dst_port || ''}</td>
-            <td class="col-method ${methodClass}">${method || flagsLabel}</td>
-            <td class="col-host truncate">${escapeHtml(hostPath)}</td>
-            <td class="col-len">${pkt.length || 0}</td>
+            <td class="col-src truncate">${escapeHtml(pkt.src_ip || '')}${pkt.src_port ? ':' + pkt.src_port : ''}</td>
+            <td class="col-dst truncate">${escapeHtml(pkt.dst_ip || '')}${pkt.dst_port ? ':' + pkt.dst_port : ''}</td>
+            <td class="col-method ${methodClass}">${sourceTag}${method || flagsLabel}</td>
+            <td class="col-host truncate" title="${escapeHtml(hostPath)}">${escapeHtml(hostPath)}</td>
+            <td class="col-len">${pkt.length || (isLogcat ? '—' : 0)}</td>
         `;
+
+        if (isLogcat) {
+            tr.classList.add('logcat-row');
+        }
 
         tr.addEventListener('click', () => {
             selectRow(dom.packetsBody, pkt.id);
@@ -569,7 +575,7 @@
     function detailRow(label, value, copyable) {
         const val = escapeHtml(String(value ?? '-'));
         const copyBtn = copyable
-            ? `<button class="copy-btn" data-copy="${val}" title="Copy to clipboard">&#x1f4cb;</button>`
+            ? `<button class="copy-btn" data-copy="${val}" title="Copy to clipboard">&#x1F5CE;</button>`
             : '';
         return `<div class="detail-row">
             <span class="detail-label">${label}</span>
@@ -592,7 +598,7 @@
                     btn.innerHTML = '&#10003;';
                     setTimeout(() => {
                         btn.classList.remove('copied');
-                        btn.innerHTML = '&#x1f4cb;';
+                        btn.innerHTML = '&#x1F5CE;';
                     }, 1200);
                 }
             });
@@ -693,7 +699,9 @@
             (pkt.http_method && pkt.http_method.toLowerCase().includes(f)) ||
             (pkt.http_path && pkt.http_path.toLowerCase().includes(f)) ||
             (pkt.serial && pkt.serial.toLowerCase().includes(f)) ||
-            (pkt.protocol && pkt.protocol.toLowerCase().includes(f))
+            (pkt.protocol && pkt.protocol.toLowerCase().includes(f)) ||
+            (pkt.raw && pkt.raw.toLowerCase().includes(f)) ||
+            (pkt.flags && pkt.flags.toLowerCase().includes(f))
         );
     }
 

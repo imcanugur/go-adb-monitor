@@ -30,6 +30,9 @@ type Resolver struct {
 
 	// Background resolver
 	dnsQueue chan string
+
+	// Logcat snooper for DNS/URL intelligence.
+	snooper *LogcatSnooper
 }
 
 // NewResolver creates a resolver for the given device.
@@ -42,7 +45,13 @@ func NewResolver(client *adb.Client, log *slog.Logger, serial string) *Resolver 
 		dnsPend:  make(map[string]struct{}),
 		uidCache: make(map[int]string),
 		dnsQueue: make(chan string, 256),
+		snooper:  NewLogcatSnooper(client, log, serial),
 	}
+}
+
+// Snooper returns the logcat snooper instance (used by engine for URL captures).
+func (r *Resolver) Snooper() *LogcatSnooper {
+	return r.snooper
 }
 
 // Start begins background resolution workers. Call once.
@@ -54,6 +63,13 @@ func (r *Resolver) Start(ctx context.Context) {
 	for i := 0; i < 3; i++ {
 		go r.dnsWorker(ctx)
 	}
+
+	// Start logcat snooper for passive DNS + URL capture.
+	go func() {
+		if err := r.snooper.Run(ctx); err != nil && ctx.Err() == nil {
+			r.log.Warn("logcat snooper stopped", "error", err)
+		}
+	}()
 
 	// Periodically refresh UID map (apps can be installed/uninstalled).
 	go func() {
@@ -71,7 +87,7 @@ func (r *Resolver) Start(ctx context.Context) {
 }
 
 // ResolveHostname returns cached hostname for an IP, or empty string.
-// It asynchronously queues DNS resolution for unknown IPs.
+// It checks: 1) local cache, 2) logcat DNS snooper, then queues async resolution.
 func (r *Resolver) ResolveHostname(ip string) string {
 	if ip == "" || ip == "0.0.0.0" || ip == "::" {
 		return ""
@@ -87,6 +103,17 @@ func (r *Resolver) ResolveHostname(ip string) string {
 
 	if found {
 		return host
+	}
+
+	// Check logcat snooper's DNS cache (populated from device DNS queries).
+	if r.snooper != nil {
+		if snoopHost := r.snooper.LookupIP(ip); snoopHost != "" {
+			// Cache it locally too.
+			r.dnsMu.Lock()
+			r.dnsCache[ip] = snoopHost
+			r.dnsMu.Unlock()
+			return snoopHost
+		}
 	}
 
 	// Queue for async resolution (non-blocking).
@@ -136,20 +163,40 @@ func (r *Resolver) dnsWorker(ctx context.Context) {
 	}
 }
 
-// doReverseDNS performs the actual DNS lookup with timeout.
+// doReverseDNS performs the actual DNS lookup with multiple fallbacks:
+// 1. Check logcat snooper cache (again, may have been populated since queueing)
+// 2. Go net.LookupAddr (standard reverse DNS)
+// 3. Device-side nslookup/host command (device may have cached forward lookup)
 func (r *Resolver) doReverseDNS(ip string) string {
+	// Check snooper cache once more (may have been populated while queued).
+	if r.snooper != nil {
+		if host := r.snooper.LookupIP(ip); host != "" {
+			return host
+		}
+	}
+
+	// Standard reverse DNS lookup.
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
 	resolver := &net.Resolver{}
 	names, err := resolver.LookupAddr(ctx, ip)
-	if err != nil || len(names) == 0 {
-		return ""
+	if err == nil && len(names) > 0 {
+		host := strings.TrimSuffix(names[0], ".")
+		return host
 	}
 
-	// Clean up the FQDN (remove trailing dot).
-	host := strings.TrimSuffix(names[0], ".")
-	return host
+	// Fallback: run nslookup/host on the device itself.
+	// The device may have the forward DNS cached.
+	if r.snooper != nil {
+		nslookupCtx, nslookupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer nslookupCancel()
+		if host := r.snooper.DeviceNslookup(nslookupCtx, ip); host != "" {
+			return host
+		}
+	}
+
+	return ""
 }
 
 // loadUIDMap loads UID→package name mapping from the device.

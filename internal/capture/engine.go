@@ -91,8 +91,11 @@ func (e *Engine) Run(ctx context.Context) error {
 	e.stats.Store(s)
 	e.log.Info("capture engine starting", "mode", mode)
 
-	// Start the resolver for DNS + UID lookups.
+	// Start the resolver for DNS + UID lookups (also starts logcat snooper).
 	e.resolver.Start(ctx)
+
+	// Process URL captures from logcat snooper → emit as packets.
+	go e.drainURLCaptures(ctx)
 
 	switch mode {
 	case ModeTcpdump:
@@ -237,6 +240,20 @@ func (e *Engine) readAndDiffProcNet(ctx context.Context, parser *ProcNetParser, 
 		if prev, exists := known[key]; exists {
 			c.FirstSeen = prev.FirstSeen
 			c.LastSeen = now
+			// Re-enrich if hostname was missing (snooper may have learned it).
+			if prev.Hostname == "" {
+				e.resolver.EnrichConnection(&c)
+				if c.Hostname != "" {
+					// Emit updated connection.
+					select {
+					case e.connCh <- c:
+					default:
+					}
+				}
+			} else {
+				c.Hostname = prev.Hostname
+				c.AppName = prev.AppName
+			}
 			known[key] = c
 			continue
 		}
@@ -277,6 +294,77 @@ func (e *Engine) readAndDiffProcNet(ctx context.Context, parser *ProcNetParser, 
 func connKey(c Connection) string {
 	return fmt.Sprintf("%s:%d->%s:%d/%s",
 		c.LocalIP, c.LocalPort, c.RemoteIP, c.RemotePort, c.State)
+}
+
+// drainURLCaptures reads URL events from logcat snooper and emits as network packets.
+func (e *Engine) drainURLCaptures(ctx context.Context) {
+	snooper := e.resolver.Snooper()
+	if snooper == nil {
+		return
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case cap, ok := <-snooper.URLs():
+			if !ok {
+				return
+			}
+
+			host := extractHostFromURL(cap.URL)
+			path := extractPathFromURL(cap.URL)
+			method := cap.Method
+			if method == "" {
+				method = "GET"
+			}
+
+			pkt := NetworkPacket{
+				ID:         fmt.Sprintf("logcat-%d", cap.Timestamp.UnixNano()),
+				Serial:     e.serial,
+				Timestamp:  cap.Timestamp,
+				DstPort:    443,
+				Protocol:   ProtoTCP,
+				HTTPMethod: method,
+				HTTPPath:   path,
+				HTTPHost:   host,
+				Flags:      "logcat:" + cap.Tag,
+				Raw:        fmt.Sprintf("%s %s [%s]", method, cap.URL, cap.Tag),
+			}
+
+			// Try to get the IP for this host from snooper cache.
+			if ip := snooper.LookupDomain(host); ip != "" {
+				pkt.DstIP = ip
+			}
+
+			s := e.Stats()
+			s.PacketCount++
+			s.LastActivity = time.Now()
+			e.stats.Store(&s)
+
+			select {
+			case e.packetCh <- pkt:
+			default:
+			}
+		}
+	}
+}
+
+// extractPathFromURL extracts the path component from a URL string.
+func extractPathFromURL(rawURL string) string {
+	after := rawURL
+	if idx := strings.Index(after, "://"); idx >= 0 {
+		after = after[idx+3:]
+	}
+	if idx := strings.IndexByte(after, '/'); idx >= 0 {
+		path := after[idx:]
+		// Remove query string for display.
+		if qi := strings.IndexByte(path, '?'); qi >= 0 {
+			path = path[:qi]
+		}
+		return path
+	}
+	return "/"
 }
 
 // connToPacket converts a Connection to a NetworkPacket for the Packets tab.
