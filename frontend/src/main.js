@@ -148,6 +148,8 @@
 
         dom.searchInput.addEventListener('input', (e) => {
             state.filter = e.target.value.toLowerCase();
+            applyFilterToTable(dom.packetsBody);
+            applyFilterToTable(dom.connectionsBody);
         });
 
         // Tab switching.
@@ -337,6 +339,9 @@
 
         dom.connectionsEmpty.classList.add('hidden');
 
+        // Apply filter.
+        if (state.filter && !matchesConnectionFilter(conn)) return;
+
         const tr = document.createElement('tr');
         tr.dataset.id = conn.id;
 
@@ -511,6 +516,33 @@
             (pkt.serial && pkt.serial.toLowerCase().includes(f)) ||
             (pkt.protocol && pkt.protocol.toLowerCase().includes(f))
         );
+    }
+
+    function matchesConnectionFilter(conn) {
+        const f = state.filter;
+        if (!f) return true;
+        return (
+            (conn.local_ip && conn.local_ip.includes(f)) ||
+            (conn.remote_ip && conn.remote_ip.includes(f)) ||
+            (conn.serial && conn.serial.toLowerCase().includes(f)) ||
+            (conn.state && conn.state.toLowerCase().includes(f)) ||
+            (conn.protocol && conn.protocol.toLowerCase().includes(f)) ||
+            (String(conn.remote_port).includes(f)) ||
+            (String(conn.local_port).includes(f))
+        );
+    }
+
+    function applyFilterToTable(tbody) {
+        const rows = tbody.querySelectorAll('tr');
+        const f = state.filter;
+        rows.forEach(row => {
+            if (!f) {
+                row.style.display = '';
+                return;
+            }
+            const text = row.textContent.toLowerCase();
+            row.style.display = text.includes(f) ? '' : 'none';
+        });
     }
 
     // ---- Boot ----

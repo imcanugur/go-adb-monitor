@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"embed"
 	"flag"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
@@ -17,6 +19,15 @@ import (
 	"github.com/imcanugur/go-adb-monitor/internal/store"
 )
 
+// Embed the frontend assets and platform-tools (ADB) into the binary.
+// This makes the output a completely self-contained single file.
+//
+//go:embed frontend
+var frontendFS embed.FS
+
+//go:embed platform-tools
+var platformToolsFS embed.FS
+
 func main() {
 	addr := flag.String("addr", ":8080", "HTTP listen address")
 	flag.Parse()
@@ -26,13 +37,22 @@ func main() {
 		Format: "text",
 	})
 
-	// Discover and start ADB server.
-	adbMgr, err := adbbin.New(log)
+	// Extract embedded ADB to a temp dir and start the server.
+	adbMgr, err := adbbin.NewFromEmbed(log, platformToolsFS)
 	if err != nil {
-		log.Warn("ADB binary not found, assuming server running externally", "error", err)
-	} else {
+		log.Warn("embedded ADB extraction failed, trying system ADB", "error", err)
+		// Fallback: try to find ADB on the system.
+		adbMgr, err = adbbin.New(log)
+		if err != nil {
+			log.Error("ADB not available — network capture will not work", "error", err)
+		}
+	}
+
+	if adbMgr != nil {
+		defer adbMgr.Cleanup()
+
 		ver, _ := adbMgr.Version()
-		log.Info("ADB binary resolved", "path", adbMgr.Path(), "version", ver)
+		log.Info("ADB ready", "path", adbMgr.Path(), "version", ver)
 
 		if err := adbMgr.EnsureServer(); err != nil {
 			log.Error("failed to start ADB server", "error", err)
@@ -58,8 +78,9 @@ func main() {
 	mux := http.NewServeMux()
 	app.RegisterRoutes(mux)
 
-	// Serve frontend static files.
-	mux.Handle("/", http.FileServer(http.Dir("frontend")))
+	// Serve embedded frontend files.
+	frontendSub, _ := fs.Sub(frontendFS, "frontend")
+	mux.Handle("/", http.FileServer(http.FS(frontendSub)))
 
 	srv := &http.Server{
 		Addr:    *addr,

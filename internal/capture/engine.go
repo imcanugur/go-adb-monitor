@@ -193,13 +193,15 @@ func (e *Engine) readAndDiffProcNet(ctx context.Context, parser *ProcNetParser, 
 	readCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
+	var conns []Connection
+
 	// Read TCP connections.
 	tcpOut, err := e.client.Shell(readCtx, e.serial, "cat /proc/net/tcp 2>/dev/null")
 	if err != nil {
 		e.log.Debug("failed to read /proc/net/tcp", "error", err)
 		return
 	}
-	conns := parser.ParseProcNet(tcpOut, ProtoTCP)
+	conns = append(conns, parser.ParseProcNet(tcpOut, ProtoTCP)...)
 
 	// Read TCP6 connections.
 	tcp6Out, err := e.client.Shell(readCtx, e.serial, "cat /proc/net/tcp6 2>/dev/null")
@@ -207,7 +209,19 @@ func (e *Engine) readAndDiffProcNet(ctx context.Context, parser *ProcNetParser, 
 		conns = append(conns, parser.ParseProcNet(tcp6Out, ProtoTCP)...)
 	}
 
-	// Diff to find new connections.
+	// Read UDP connections.
+	udpOut, err := e.client.Shell(readCtx, e.serial, "cat /proc/net/udp 2>/dev/null")
+	if err == nil {
+		conns = append(conns, parser.ParseProcNet(udpOut, ProtoUDP)...)
+	}
+
+	// Read UDP6 connections.
+	udp6Out, err := e.client.Shell(readCtx, e.serial, "cat /proc/net/udp6 2>/dev/null")
+	if err == nil {
+		conns = append(conns, parser.ParseProcNet(udp6Out, ProtoUDP)...)
+	}
+
+	// Diff to find new/changed connections.
 	now := time.Now()
 	seen := make(map[string]struct{}, len(conns))
 
@@ -222,22 +236,27 @@ func (e *Engine) readAndDiffProcNet(ctx context.Context, parser *ProcNetParser, 
 			continue
 		}
 
-		// New connection.
+		// New connection — emit on both channels.
 		c.FirstSeen = now
 		c.LastSeen = now
 		known[key] = c
 
 		s := e.Stats()
 		s.ConnCount++
+		s.PacketCount++
 		s.LastActivity = now
 		e.stats.Store(&s)
 
 		select {
 		case e.connCh <- c:
 		default:
-			s2 := e.Stats()
-			s2.Errors++
-			e.stats.Store(&s2)
+		}
+
+		// Also emit as a NetworkPacket so the Packets tab has data.
+		pkt := connToPacket(c)
+		select {
+		case e.packetCh <- pkt:
+		default:
 		}
 	}
 
@@ -252,4 +271,29 @@ func (e *Engine) readAndDiffProcNet(ctx context.Context, parser *ProcNetParser, 
 func connKey(c Connection) string {
 	return fmt.Sprintf("%s:%d->%s:%d/%s",
 		c.LocalIP, c.LocalPort, c.RemoteIP, c.RemotePort, c.State)
+}
+
+// connToPacket converts a Connection to a NetworkPacket for the Packets tab.
+func connToPacket(c Connection) NetworkPacket {
+	method := ""
+	host := ""
+	if IsHTTPPort(c.RemotePort) {
+		method = string(c.State)
+		host = c.RemoteIP
+	}
+
+	return NetworkPacket{
+		ID:        c.ID + "-pkt",
+		Serial:    c.Serial,
+		Timestamp: c.FirstSeen,
+		SrcIP:     c.LocalIP,
+		SrcPort:   c.LocalPort,
+		DstIP:     c.RemoteIP,
+		DstPort:   c.RemotePort,
+		Protocol:  c.Protocol,
+		Flags:     string(c.State),
+		HTTPMethod: method,
+		HTTPHost:  host,
+		Raw:       fmt.Sprintf("%s %s:%d -> %s:%d [%s]", c.Protocol, c.LocalIP, c.LocalPort, c.RemoteIP, c.RemotePort, c.State),
+	}
 }
