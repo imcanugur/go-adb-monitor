@@ -349,6 +349,7 @@ tbody tr:hover { background: var(--bg-hover); }
 .col-len { width: 60px; text-align: right; }
 .col-state { width: 100px; }
 .col-seen { width: 80px; }
+.col-app { width: 120px; color: var(--accent-purple); }
 
 /* Protocol colors */
 .proto-tcp { color: var(--accent-blue); }

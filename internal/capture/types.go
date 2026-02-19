@@ -88,6 +88,8 @@ type Connection struct {
 	UID       int       `json:"uid"`
 	FirstSeen time.Time `json:"first_seen"`
 	LastSeen  time.Time `json:"last_seen"`
+	Hostname  string    `json:"hostname,omitempty"`
+	AppName   string    `json:"app_name,omitempty"`
 }
 
 // IsHTTPPort returns true if the port typically serves HTTP(S) traffic.

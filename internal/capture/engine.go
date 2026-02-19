@@ -30,10 +30,11 @@ const (
 // Engine manages network capture for a single device.
 // It selects the best capture mode (tcpdump vs procnet) and streams data.
 type Engine struct {
-	client *adb.Client
-	log    *slog.Logger
-	serial string
-	mode   Mode
+	client   *adb.Client
+	log      *slog.Logger
+	serial   string
+	mode     Mode
+	resolver *Resolver
 
 	packetCh chan NetworkPacket
 	connCh   chan Connection
@@ -51,6 +52,7 @@ func NewEngine(client *adb.Client, log *slog.Logger, serial string, mode Mode) *
 		log:      log.With("component", "capture", "serial", serial),
 		serial:   serial,
 		mode:     mode,
+		resolver: NewResolver(client, log, serial),
 		packetCh: make(chan NetworkPacket, packetChannelBuffer),
 		connCh:   make(chan Connection, packetChannelBuffer),
 	}
@@ -88,6 +90,9 @@ func (e *Engine) Run(ctx context.Context) error {
 	}
 	e.stats.Store(s)
 	e.log.Info("capture engine starting", "mode", mode)
+
+	// Start the resolver for DNS + UID lookups.
+	e.resolver.Start(ctx)
 
 	switch mode {
 	case ModeTcpdump:
@@ -236,9 +241,10 @@ func (e *Engine) readAndDiffProcNet(ctx context.Context, parser *ProcNetParser, 
 			continue
 		}
 
-		// New connection — emit on both channels.
+		// New connection — enrich and emit on both channels.
 		c.FirstSeen = now
 		c.LastSeen = now
+		e.resolver.EnrichConnection(&c)
 		known[key] = c
 
 		s := e.Stats()
@@ -274,13 +280,9 @@ func connKey(c Connection) string {
 }
 
 // connToPacket converts a Connection to a NetworkPacket for the Packets tab.
+// Note: procnet data has no HTTP layer — we only set network-level fields.
 func connToPacket(c Connection) NetworkPacket {
-	method := ""
-	host := ""
-	if IsHTTPPort(c.RemotePort) {
-		method = string(c.State)
-		host = c.RemoteIP
-	}
+	host := c.Hostname // resolved by DNS if available
 
 	return NetworkPacket{
 		ID:        c.ID + "-pkt",
@@ -292,7 +294,6 @@ func connToPacket(c Connection) NetworkPacket {
 		DstPort:   c.RemotePort,
 		Protocol:  c.Protocol,
 		Flags:     string(c.State),
-		HTTPMethod: method,
 		HTTPHost:  host,
 		Raw:       fmt.Sprintf("%s %s:%d -> %s:%d [%s]", c.Protocol, c.LocalIP, c.LocalPort, c.RemoteIP, c.RemotePort, c.State),
 	}

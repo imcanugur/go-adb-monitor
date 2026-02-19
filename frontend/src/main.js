@@ -398,7 +398,10 @@
         const protoClass = `proto-${proto.toLowerCase()}`;
         const method = pkt.http_method || '';
         const methodClass = method ? `method-${method.toLowerCase()}` : '';
-        const hostPath = pkt.http_host ? `${pkt.http_host}${pkt.http_path || ''}` : '';
+        const hostPath = pkt.http_host
+            ? `${pkt.http_host}${pkt.http_path || ''}`
+            : '';
+        const flagsLabel = (!method && pkt.flags) ? pkt.flags : '';
 
         tr.innerHTML = `
             <td class="col-time">${time}</td>
@@ -406,7 +409,7 @@
             <td class="col-proto ${protoClass}">${proto}</td>
             <td class="col-src truncate">${escapeHtml(pkt.src_ip || '')}:${pkt.src_port || ''}</td>
             <td class="col-dst truncate">${escapeHtml(pkt.dst_ip || '')}:${pkt.dst_port || ''}</td>
-            <td class="col-method ${methodClass}">${method}</td>
+            <td class="col-method ${methodClass}">${method || flagsLabel}</td>
             <td class="col-host truncate">${escapeHtml(hostPath)}</td>
             <td class="col-len">${pkt.length || 0}</td>
         `;
@@ -444,6 +447,8 @@
         const protoClass = `proto-${proto.toLowerCase()}`;
         const stateClass = `state-${(conn.state || '').toLowerCase().replace(/ /g, '_')}`;
         const seen = formatTime(conn.first_seen);
+        const appName = conn.app_name || '';
+        const hostname = conn.hostname || '';
 
         tr.innerHTML = `
             <td class="col-device truncate">${escapeHtml(conn.serial || '')}</td>
@@ -451,6 +456,8 @@
             <td class="col-state ${stateClass}">${conn.state || ''}</td>
             <td class="col-local truncate">${escapeHtml(conn.local_ip || '')}:${conn.local_port || ''}</td>
             <td class="col-remote truncate">${escapeHtml(conn.remote_ip || '')}:${conn.remote_port || ''}</td>
+            <td class="col-host truncate" title="${escapeHtml(hostname)}">${escapeHtml(hostname)}</td>
+            <td class="col-app truncate" title="${escapeHtml(appName)}">${escapeHtml(shortPkg(appName))}</td>
             <td class="col-seen">${seen}</td>
         `;
 
@@ -525,6 +532,8 @@
                 ${detailRow('Protocol', conn.protocol)}
                 ${detailRow('State', conn.state)}
                 ${detailRow('UID', conn.uid)}
+                ${conn.app_name ? detailRow('App', conn.app_name, true) : ''}
+                ${conn.hostname ? detailRow('Host', conn.hostname, true) : ''}
             </div>
             <div class="detail-section">
                 <h4>Local</h4>
@@ -697,6 +706,8 @@
             (conn.serial && conn.serial.toLowerCase().includes(f)) ||
             (conn.state && conn.state.toLowerCase().includes(f)) ||
             (conn.protocol && conn.protocol.toLowerCase().includes(f)) ||
+            (conn.hostname && conn.hostname.toLowerCase().includes(f)) ||
+            (conn.app_name && conn.app_name.toLowerCase().includes(f)) ||
             (String(conn.remote_port).includes(f)) ||
             (String(conn.local_port).includes(f))
         );
@@ -713,6 +724,14 @@
             const text = row.textContent.toLowerCase();
             row.style.display = text.includes(f) ? '' : 'none';
         });
+    }
+
+    // Shorten package name: "com.google.android.apps.maps" → "c.g.a.a.maps"
+    function shortPkg(pkg) {
+        if (!pkg) return '';
+        const parts = pkg.split('.');
+        if (parts.length <= 2) return pkg;
+        return parts.slice(0, -1).map(p => p[0]).join('.') + '.' + parts[parts.length - 1];
     }
 
     // ---- Boot ----

@@ -70,10 +70,13 @@ func (p *ProcNetParser) parseLine(line string, proto Protocol, now time.Time) *C
 	uid, _ := strconv.Atoi(uidStr)
 
 	// Skip loopback and LISTEN sockets for connection tracking.
-	if localIP == "127.0.0.1" && remoteIP == "127.0.0.1" {
+	if isLoopback(localIP) && isLoopback(remoteIP) {
 		return nil
 	}
-	if remoteIP == "0.0.0.0" && state == ConnListen {
+	if (remoteIP == "0.0.0.0" || remoteIP == "::" || remoteIP == "::1") && state == ConnListen {
+		return nil
+	}
+	if state == ConnListen {
 		return nil
 	}
 
@@ -132,17 +135,42 @@ func parseHexIP(h string) (string, error) {
 			return "", err
 		}
 		// Convert each 4-byte group from little-endian to network order.
-		parts := make([]string, 8)
+		words := make([]uint32, 4)
 		for i := 0; i < 4; i++ {
 			off := i * 4
-			w := uint32(b[off+3])<<24 | uint32(b[off+2])<<16 | uint32(b[off+1])<<8 | uint32(b[off])
-			parts[i*2] = fmt.Sprintf("%x", w>>16)
-			parts[i*2+1] = fmt.Sprintf("%x", w&0xFFFF)
+			words[i] = uint32(b[off+3])<<24 | uint32(b[off+2])<<16 | uint32(b[off+1])<<8 | uint32(b[off])
+		}
+
+		// Detect IPv4-mapped IPv6 (::ffff:X.X.X.X) and convert to plain IPv4.
+		if words[0] == 0 && words[1] == 0 && words[2] == 0x0000FFFF {
+			w := words[3]
+			return fmt.Sprintf("%d.%d.%d.%d", w>>24, (w>>16)&0xFF, (w>>8)&0xFF, w&0xFF), nil
+		}
+
+		// Detect IPv6 loopback (::1).
+		if words[0] == 0 && words[1] == 0 && words[2] == 0 && words[3] == 1 {
+			return "::1", nil
+		}
+
+		// Detect all-zeros (::).
+		if words[0] == 0 && words[1] == 0 && words[2] == 0 && words[3] == 0 {
+			return "::", nil
+		}
+
+		parts := make([]string, 8)
+		for i := 0; i < 4; i++ {
+			parts[i*2] = fmt.Sprintf("%x", words[i]>>16)
+			parts[i*2+1] = fmt.Sprintf("%x", words[i]&0xFFFF)
 		}
 		return strings.Join(parts, ":"), nil
 	}
 
 	return "", fmt.Errorf("unknown IP hex length: %d", len(h))
+}
+
+// isLoopback returns true for loopback addresses.
+func isLoopback(ip string) bool {
+	return ip == "127.0.0.1" || ip == "::1" || strings.HasPrefix(ip, "127.")
 }
 
 func parseConnState(hexState string) ConnState {
