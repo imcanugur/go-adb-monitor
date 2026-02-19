@@ -24,10 +24,12 @@
                 </div>
             </div>
             <div class="toolbar-right">
-                <button id="btn-refresh" class="btn btn-secondary" title="Refresh Devices">↻ Refresh</button>
+                <button id="btn-refresh" class="btn" title="Refresh Devices">↻ Refresh</button>
                 <button id="btn-start-all" class="btn btn-primary" title="Start All Captures">▶ Start All</button>
                 <button id="btn-stop-all" class="btn btn-danger" title="Stop All Captures">■ Stop All</button>
-                <button id="btn-clear" class="btn btn-secondary" title="Clear Data">✕ Clear</button>
+                <button id="btn-autoscroll" class="btn btn-toggle active" title="Auto-scroll (Ctrl+J)">⇊ Auto</button>
+                <button id="btn-export" class="btn" title="Export visible data as JSON">⬇ Export</button>
+                <button id="btn-clear" class="btn" title="Clear Data (Ctrl+L)">✕ Clear</button>
             </div>
         </header>
 
@@ -46,8 +48,8 @@
             <!-- Center: Network Table -->
             <main id="network-panel">
                 <div class="panel-tabs">
-                    <button class="tab active" data-tab="packets">Packets</button>
-                    <button class="tab" data-tab="connections">Connections</button>
+                    <button class="tab active" data-tab="packets">Packets <span id="tab-packets-count" class="tab-badge">0</span></button>
+                    <button class="tab" data-tab="connections">Connections <span id="tab-connections-count" class="tab-badge">0</span></button>
                 </div>
 
                 <!-- Packets Table -->

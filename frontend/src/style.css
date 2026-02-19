@@ -338,7 +338,6 @@ tbody td {
 
 tbody tr { cursor: pointer; transition: background var(--transition); }
 tbody tr:hover { background: var(--bg-hover); }
-tbody tr.selected { background: var(--bg-active); }
 
 /* Column widths */
 .col-time { width: 80px; }
@@ -410,15 +409,8 @@ tbody tr.selected { background: var(--bg-active); }
     margin-bottom: 6px;
 }
 
-.detail-row {
-    display: flex;
-    justify-content: space-between;
-    padding: 3px 0;
-    font-size: 12px;
-}
-
 .detail-label { color: var(--text-muted); }
-.detail-value { font-family: var(--font-mono); color: var(--text-primary); text-align: right; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+.detail-value { font-family: var(--font-mono); color: var(--text-primary); text-align: right; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---- Status Bar ---- */
 #status-bar {
@@ -452,6 +444,138 @@ tbody tr.selected { background: var(--bg-active); }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ---- Toggle Button ---- */
+.btn-toggle {
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+}
+.btn-toggle.active {
+    background: rgba(122, 162, 247, 0.15);
+    color: var(--accent-blue);
+    border-color: var(--accent-blue);
+}
+
+/* ---- Tab Badge ---- */
+.tab-badge {
+    display: inline-block;
+    min-width: 18px;
+    padding: 0 5px;
+    margin-left: 4px;
+    border-radius: 9px;
+    font-size: 10px;
+    font-weight: 700;
+    text-align: center;
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
+    vertical-align: middle;
+    line-height: 16px;
+    transition: all var(--transition);
+}
+.tab.active .tab-badge {
+    background: rgba(122, 162, 247, 0.2);
+    color: var(--accent-blue);
+}
+
+/* ---- Copy Button in Detail Panel ---- */
+.detail-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 3px 0;
+    font-size: 12px;
+    gap: 4px;
+}
+
+.detail-value-wrap {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    max-width: 200px;
+}
+
+.copy-btn {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: none;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 12px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all var(--transition);
+}
+
+.detail-row:hover .copy-btn { display: flex; }
+.copy-btn:hover { background: var(--bg-hover); color: var(--accent-blue); }
+
+.copy-btn.copied {
+    display: flex;
+    color: var(--accent-green);
+}
+
+/* ---- Selected Row ---- */
+tbody tr.selected {
+    background: var(--bg-active) !important;
+    border-left: 2px solid var(--accent-blue);
+}
+
+tbody tr.selected td:first-child {
+    padding-left: 8px;
+}
+
+/* ---- Toast Notification ---- */
+.toast-container {
+    position: fixed;
+    bottom: 36px;
+    right: 16px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 6px;
+    pointer-events: none;
+}
+
+.toast {
+    padding: 6px 14px;
+    border-radius: var(--radius);
+    font-size: 12px;
+    font-weight: 500;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    animation: toastIn 200ms ease, toastOut 200ms ease 1.6s forwards;
+    pointer-events: auto;
+}
+
+.toast-success { border-color: var(--accent-green); color: var(--accent-green); }
+.toast-error { border-color: var(--accent-red); color: var(--accent-red); }
+
+@keyframes toastIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+@keyframes toastOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+
+/* ---- Detail Panel Sections (improved) ---- */
+.detail-section h4 {
+    font-size: 11px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(59, 66, 97, 0.4);
+}
 
 /* ---- Utility ---- */
 .hidden { display: none !important; }
