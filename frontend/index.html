@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Android ADB Network Inspector</title>
+    <link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Top Toolbar -->
+        <header id="toolbar">
+            <div class="toolbar-left">
+                <h1 class="app-title">
+                    <span class="icon">📡</span>
+                    ADB Network Inspector
+                </h1>
+                <span id="device-count-badge" class="badge">0 devices</span>
+                <span id="capture-badge" class="badge badge-inactive">Idle</span>
+            </div>
+            <div class="toolbar-center">
+                <div class="search-container">
+                    <input type="text" id="search-input" placeholder="Filter by IP, host, method, serial..." />
+                </div>
+            </div>
+            <div class="toolbar-right">
+                <button id="btn-refresh" class="btn btn-secondary" title="Refresh Devices">↻ Refresh</button>
+                <button id="btn-start-all" class="btn btn-primary" title="Start All Captures">▶ Start All</button>
+                <button id="btn-stop-all" class="btn btn-danger" title="Stop All Captures">■ Stop All</button>
+                <button id="btn-clear" class="btn btn-secondary" title="Clear Data">✕ Clear</button>
+            </div>
+        </header>
+
+        <!-- Main Layout -->
+        <div id="main-layout">
+            <!-- Left Sidebar: Device List -->
+            <aside id="device-sidebar">
+                <div class="sidebar-header">
+                    <h2>Devices</h2>
+                </div>
+                <div id="device-list" class="device-list">
+                    <div class="empty-state">No devices connected</div>
+                </div>
+            </aside>
+
+            <!-- Center: Network Table -->
+            <main id="network-panel">
+                <div class="panel-tabs">
+                    <button class="tab active" data-tab="packets">Packets</button>
+                    <button class="tab" data-tab="connections">Connections</button>
+                </div>
+
+                <!-- Packets Table -->
+                <div id="packets-view" class="table-container active">
+                    <table id="packets-table">
+                        <thead>
+                            <tr>
+                                <th class="col-time">Time</th>
+                                <th class="col-device">Device</th>
+                                <th class="col-proto">Proto</th>
+                                <th class="col-src">Source</th>
+                                <th class="col-dst">Destination</th>
+                                <th class="col-method">Method</th>
+                                <th class="col-host">Host/Path</th>
+                                <th class="col-len">Length</th>
+                            </tr>
+                        </thead>
+                        <tbody id="packets-body">
+                        </tbody>
+                    </table>
+                    <div id="packets-empty" class="empty-state">
+                        <p>No packets captured yet</p>
+                        <p class="hint">Connect a device and start capture to see network traffic</p>
+                    </div>
+                </div>
+
+                <!-- Connections Table -->
+                <div id="connections-view" class="table-container">
+                    <table id="connections-table">
+                        <thead>
+                            <tr>
+                                <th class="col-device">Device</th>
+                                <th class="col-proto">Proto</th>
+                                <th class="col-state">State</th>
+                                <th class="col-local">Local</th>
+                                <th class="col-remote">Remote</th>
+                                <th class="col-seen">First Seen</th>
+                            </tr>
+                        </thead>
+                        <tbody id="connections-body">
+                        </tbody>
+                    </table>
+                    <div id="connections-empty" class="empty-state">
+                        <p>No connections tracked yet</p>
+                        <p class="hint">Start capture to monitor active connections</p>
+                    </div>
+                </div>
+            </main>
+
+            <!-- Right Panel: Detail -->
+            <aside id="detail-panel" class="collapsed">
+                <div class="detail-header">
+                    <h3>Details</h3>
+                    <button id="btn-close-detail" class="btn-icon">✕</button>
+                </div>
+                <div id="detail-content">
+                    <div class="empty-state">Select a packet to view details</div>
+                </div>
+            </aside>
+        </div>
+
+        <!-- Status Bar -->
+        <footer id="status-bar">
+            <span id="status-adb">ADB: connecting...</span>
+            <span id="status-packets">Packets: 0</span>
+            <span id="status-connections">Connections: 0</span>
+            <span id="status-pool">Workers: 0/100</span>
+            <span id="status-memory">Ring Buffer: 0/50000</span>
+        </footer>
+    </div>
+
+    <script src="/src/main.js"></script>
+</body>
+</html>
